@@ -2,32 +2,38 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
-	"strings"
+	"io"
+	"os"
 )
 
-type TransformFunc func(string) string
+type TransformFunc func(*bytes.Buffer) *bytes.Buffer
 
-func RenderBuffer(input string, transforms ...TransformFunc) string {
+func RenderBuffer(input *bytes.Buffer, transforms ...TransformFunc) *bytes.Buffer {
 	for _, transform := range transforms {
 		input = transform(input)
 	}
 	return input
 }
 
-func addLineNumbers(input string) string {
-	var result strings.Builder
-	scanner := bufio.NewScanner(strings.NewReader(input))
+func addLineNumbers(input *bytes.Buffer) *bytes.Buffer {
+	output := &bytes.Buffer{}
+	scanner := bufio.NewScanner(input)
 	lineNumber := 1
 	for scanner.Scan() {
-		result.WriteString(fmt.Sprintf("%d. %s\n", lineNumber, scanner.Text()))
+		fmt.Fprintf(output, "%d. %s\n", lineNumber, scanner.Text())
 		lineNumber++
 	}
-	return strings.TrimSuffix(result.String(), "\n")
+	return output
 }
 
 func main() {
-	input := "my test string"
+	input := bytes.NewBufferString("my test string")
 	result := RenderBuffer(input, addLineNumbers)
-	fmt.Println(result)
+	_, err := io.Copy(os.Stdout, result)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
+		os.Exit(1)
+	}
 }
