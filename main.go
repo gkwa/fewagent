@@ -6,32 +6,46 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
-type TransformFunc func(*bytes.Buffer) *bytes.Buffer
+type TransformFunc func(io.Reader, io.Writer) error
 
-func RenderBuffer(input *bytes.Buffer, transforms ...TransformFunc) *bytes.Buffer {
+func RenderBuffer(input io.Reader, transforms ...TransformFunc) (io.Reader, error) {
+	var err error
 	for _, transform := range transforms {
-		input = transform(input)
+		var output bytes.Buffer
+		err = transform(input, &output)
+		if err != nil {
+			return nil, err
+		}
+		input = &output
 	}
-	return input
+	return input, nil
 }
 
-func addLineNumbers(input *bytes.Buffer) *bytes.Buffer {
-	output := &bytes.Buffer{}
+func addLineNumbers(input io.Reader, output io.Writer) error {
 	scanner := bufio.NewScanner(input)
 	lineNumber := 1
 	for scanner.Scan() {
-		fmt.Fprintf(output, "%d. %s\n", lineNumber, scanner.Text())
+		_, err := fmt.Fprintf(output, "%d. %s\n", lineNumber, scanner.Text())
+		if err != nil {
+			return err
+		}
 		lineNumber++
 	}
-	return output
+	return scanner.Err()
 }
 
 func main() {
-	input := bytes.NewBufferString("my test string")
-	result := RenderBuffer(input, addLineNumbers)
-	_, err := io.Copy(os.Stdout, result)
+	input := strings.NewReader("my test string")
+	result, err := RenderBuffer(input, addLineNumbers)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	_, err = io.Copy(os.Stdout, result)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing output: %v\n", err)
 		os.Exit(1)
